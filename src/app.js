@@ -15,6 +15,14 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// --- ADICIONE ESTE MIDDLEWARE DE LOG AQUI ---
+app.use((req, res, next) => {
+    console.log(`Requisição recebida: ${req.method} ${req.originalUrl}`);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    next(); // Continua para a próxima middleware/rota
+});
+
 app.post('/test-post', (req, res) => {
     console.log('Recebida requisição POST em /test-post');
     console.log('Corpo da requisição:', req.body);
