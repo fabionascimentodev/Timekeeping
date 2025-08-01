@@ -1,50 +1,27 @@
-// src/app.js
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-// const dotenv = require('dotenv'); // Não precisa mais importar aqui
-const authRoutes = require('./routes/authRoutes');
-const userRoutes = require('./routes/userRoutes');
-const clockRoutes = require('./routes/clockRoutes');
-const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+// server.js (na raiz do projeto)
+const dotenv = require('dotenv'); // Importa o dotenv
 
-// REMOVA ESTE BLOCO, POIS O dotenv.config() SERÁ CHAMADO EM server.js
-// console.log('--- app.js: Iniciando carregamento de variáveis de ambiente ---');
-// if (process.env.NODE_ENV !== 'production') {
-//     dotenv.config();
-//     console.log('--- app.js: Variáveis de ambiente carregadas via dotenv ---');
-// } else {
-//     console.log('--- app.js: Ambiente de produção, dotenv não carregado. Usando variáveis do Railway. ---');
-// }
+// Carrega as variáveis de ambiente do arquivo .env (apenas em desenvolvimento)
+// ESTA LINHA DEVE SER A PRIMEIRA A SER EXECUTADA PARA GARANTIR QUE AS VARIAVEIS ESTEJAM DISPONIVEIS
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config();
+    console.log('--- server.js: Variáveis de ambiente carregadas via dotenv ---');
+} else {
+    console.log('--- server.js: Ambiente de produção, dotenv não carregado. Usando variáveis do Railway. ---');
+}
 
-console.log('--- app.js: JWT_SECRET (primeiros 5 chars):', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 5) : 'UNDEFINED');
-console.log('--- app.js: DATABASE_URL (primeiros 10 chars):', process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 10) : 'UNDEFINED');
+// Importa o aplicativo Express que você definiu em src/app.js
+// ESTA É A ÚNICA IMPORTAÇÃO DE MÓDULO DA SUA APLICAÇÃO AQUI.
+const app = require('./src/app');
 
+// Define a porta em que o servidor irá escutar.
+const PORT = process.env.PORT || 5000;
 
-const app = express();
-console.log('--- app.js: Instância Express criada ---');
-
-// Middlewares
-app.use(cors());
-app.use(bodyParser.json());
-console.log('--- app.js: Middlewares CORS e bodyParser configurados ---');
-
-// Rota de teste simples
-app.get('/', (req, res) => {
-    res.send('API de Controle de Ponto está rodando...');
-    console.log('--- app.js: Requisição GET / recebida ---');
+console.log('--- server.js: Iniciando servidor ---');
+// Inicia o servidor Express para escutar por requisições na porta especificada.
+app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    console.log('--- server.js: Servidor Express está escutando ---');
 });
-
-// Rotas da API
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/clock', clockRoutes);
-console.log('--- app.js: Rotas da API configuradas ---');
-
-// Middlewares de tratamento de erros
-app.use(notFound);
-app.use(errorHandler);
-console.log('--- app.js: Middlewares de tratamento de erros configurados ---');
-
-module.exports = app;
-console.log('--- app.js: Módulo app exportado ---');
+console.log('--- server.js: Script de inicialização concluído ---');
