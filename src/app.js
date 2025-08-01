@@ -1,46 +1,38 @@
 // src/app.js
 const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
+const bodyParser = require('body-parser'); // Para analisar corpos de requisição
+const cors = require('cors'); // Para habilitar CORS
+const dotenv = require('dotenv'); // Para carregar variáveis de ambiente
+const authRoutes = require('./routes/authRoutes'); // Importa as rotas de autenticação
+const userRoutes = require('./routes/userRoutes'); // Importa as rotas de usuário
+const clockRoutes = require('./routes/clockRoutes'); // Importa as rotas de ponto
+const { notFound, errorHandler } = require('./middleware/errorMiddleware'); // Importa os middlewares de erro
 
-// Importa o middleware de autenticação
-// Caminho: './middleware/authMiddleware' (assumindo que authMiddleware.js está em src/middleware/)
-const authMiddleware = require('./middleware/authMiddleware');
-
-const authRoutes = require('./routes/authRoutes');
-const userRoutes = require('./routes/userRoutes');
-const clockRoutes = require('./routes/clockRoutes');
-const pool = require('./config/db'); // Importa a conexão com o banco de dados
+// Carrega as variáveis de ambiente do arquivo .env (apenas em desenvolvimento)
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config();
+}
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Middlewares
-app.use(cors());
-app.use(express.json());
+app.use(cors()); // Habilita o CORS para todas as origens (pode ser configurado para origens específicas)
+app.use(bodyParser.json()); // Habilita o Express a analisar corpos de requisição JSON
 
-// Middleware de log para depuração (opcional, pode ser removido depois)
-app.use((req, res, next) => {
-    console.log(`Requisição recebida: ${req.method} ${req.originalUrl}`);
-    // console.log('Headers:', req.headers); // Descomente para ver os headers
-    // console.log('Body:', req.body);     // Descomente para ver o body
-    next(); // Continua para a próxima middleware/rota
-});
-
-// Rota de teste (pode ser removida depois de confirmar que tudo funciona)
+// Rota de teste simples
 app.get('/', (req, res) => {
-    res.send('API Timekeeping funcionando!');
+    res.send('API de Controle de Ponto está rodando...');
 });
 
 // Rotas da API
-// As rotas de autenticação (login, register-admin) NÃO precisam de proteção
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authRoutes); // Rotas de autenticação (login, registro)
+app.use('/api/users', userRoutes); // Rotas de gerenciamento de usuários
+app.use('/api/clock', clockRoutes); // Rotas de controle de ponto
 
-// Protege as rotas de usuários e de ponto com o middleware de autenticação
-app.use('/api/users', authMiddleware, userRoutes); // Aplica authMiddleware antes de userRoutes
-app.use('/api/clock', authMiddleware, clockRoutes); // Aplica authMiddleware antes de clockRoutes
+// Middlewares de tratamento de erros
+// Este middleware captura requisições para rotas não existentes (404 Not Found)
+app.use(notFound);
+// Este middleware é o manipulador de erros final
+app.use(errorHandler);
 
-// Inicia o servidor
-app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
-});
+module.exports = app;
