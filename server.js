@@ -1,13 +1,50 @@
-// server.js (ou index.js)
-const app = require('./src/app'); // Importa o aplicativo Express que você definiu em src/app.js
+// src/app.js
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+// const dotenv = require('dotenv'); // Não precisa mais importar aqui
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const clockRoutes = require('./routes/clockRoutes');
+const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 
-// Define a porta em que o servidor irá escutar.
-// Ele tentará usar a porta definida pela variável de ambiente PORT (usada pelo Railway),
-// ou usará a porta 5000 como padrão se PORT não estiver definida (para desenvolvimento local).
-const PORT = process.env.PORT || 5000;
+// REMOVA ESTE BLOCO, POIS O dotenv.config() SERÁ CHAMADO EM server.js
+// console.log('--- app.js: Iniciando carregamento de variáveis de ambiente ---');
+// if (process.env.NODE_ENV !== 'production') {
+//     dotenv.config();
+//     console.log('--- app.js: Variáveis de ambiente carregadas via dotenv ---');
+// } else {
+//     console.log('--- app.js: Ambiente de produção, dotenv não carregado. Usando variáveis do Railway. ---');
+// }
 
-// Inicia o servidor Express para escutar por requisições na porta especificada.
-app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
-    console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+console.log('--- app.js: JWT_SECRET (primeiros 5 chars):', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 5) : 'UNDEFINED');
+console.log('--- app.js: DATABASE_URL (primeiros 10 chars):', process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 10) : 'UNDEFINED');
+
+
+const app = express();
+console.log('--- app.js: Instância Express criada ---');
+
+// Middlewares
+app.use(cors());
+app.use(bodyParser.json());
+console.log('--- app.js: Middlewares CORS e bodyParser configurados ---');
+
+// Rota de teste simples
+app.get('/', (req, res) => {
+    res.send('API de Controle de Ponto está rodando...');
+    console.log('--- app.js: Requisição GET / recebida ---');
 });
+
+// Rotas da API
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/clock', clockRoutes);
+console.log('--- app.js: Rotas da API configuradas ---');
+
+// Middlewares de tratamento de erros
+app.use(notFound);
+app.use(errorHandler);
+console.log('--- app.js: Middlewares de tratamento de erros configurados ---');
+
+module.exports = app;
+console.log('--- app.js: Módulo app exportado ---');
