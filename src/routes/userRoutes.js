@@ -25,10 +25,32 @@ router.put(
     '/:userId',
     authMiddleware,
     [
-        // Opcional: Adicione validação para os campos que podem ser atualizados
-        body('email').optional().isEmail().withMessage('Por favor, insira um email válido.'),
-        body('password').optional().isLength({ min: 6 }).withMessage('A senha deve ter pelo menos 6 caracteres.'),
-        body('name').optional().notEmpty().withMessage('O nome não pode ser vazio.')
+        // Validação para campos de atualização
+        body('name')
+            .optional()
+            .trim() // Remove espaços em branco do início/fim
+            .notEmpty()
+            .withMessage('O nome não pode ser vazio.'),
+        body('email')
+            .optional()
+            .isEmail()
+            .withMessage('Por favor, insira um email válido.'),
+        body('password')
+            .optional()
+            .isLength({ min: 6 })
+            .withMessage('A senha deve ter pelo menos 6 caracteres.')
+            .matches(/\d/)
+            .withMessage('A senha deve conter pelo menos um número.')
+            .matches(/[a-z]/)
+            .withMessage('A senha deve conter pelo menos uma letra minúscula.')
+            .matches(/[A-Z]/)
+            .withMessage('A senha deve conter pelo menos uma letra maiúscula.')
+            .matches(/[!@#$%^&*(),.?":{}|<>]/)
+            .withMessage('A senha deve conter pelo menos um caractere especial.'),
+        body('role')
+            .optional()
+            .isIn(['user', 'admin'])
+            .withMessage('O papel deve ser "user" ou "admin".')
     ],
     async (req, res, next) => {
         // Middleware para verificar se o usuário logado pode atualizar este perfil
