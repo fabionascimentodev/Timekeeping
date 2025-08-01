@@ -98,16 +98,67 @@ exports.clockOut = async (req, res) => {
 // Função para obter relatório de ponto de um usuário
 exports.getClockReport = async (req, res) => {
     const { userId } = req.params;
+    const { startDate, endDate } = req.query; // Pega startDate e endDate dos query parameters
 
     try {
-        const reportQuery = `
-            SELECT * FROM clock_entries
-            WHERE user_id = $1
-            ORDER BY timestamp ASC;
-        `;
-        const reportResult = await pool.query(reportQuery, [userId]);
+        // Validação básica dos query parameters (já deve ser feita na rota com express-validator)
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
 
-        res.status(200).json(reportResult.rows);
+        let reportQuery = `
+            SELECT clock_type, timestamp
+            FROM clock_entries
+            WHERE user_id = $1
+        `;
+        const queryParams = [userId];
+        let paramIndex = 2;
+
+        // Adiciona filtro por data se os parâmetros forem fornecidos
+        if (startDate && endDate) {
+            reportQuery += ` AND timestamp BETWEEN $${paramIndex} AND $${paramIndex + 1}`;
+            queryParams.push(startDate, endDate);
+            paramIndex += 2;
+        }
+
+        reportQuery += ` ORDER BY timestamp ASC;`;
+
+        const reportResult = await pool.query(reportQuery, queryParams);
+        const entries = reportResult.rows;
+
+        const dailyReport = {};
+        let lastInTime = null;
+
+        for (const entry of entries) {
+            const date = entry.timestamp.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+
+            if (!dailyReport[date]) {
+                dailyReport[date] = {
+                    date: date,
+                    entries: [],
+                    totalHours: 0
+                };
+            }
+
+            dailyReport[date].entries.push(entry);
+
+            if (entry.clock_type === 'in') {
+                lastInTime = entry.timestamp;
+            } else if (entry.clock_type === 'out' && lastInTime) {
+                const durationMs = entry.timestamp.getTime() - lastInTime.getTime();
+                dailyReport[date].totalHours += durationMs / (1000 * 60 * 60); // Converter milissegundos para horas
+                lastInTime = null; // Resetar para o próximo par in/out
+            }
+        }
+
+        // Converte o objeto dailyReport em um array para a resposta
+        const formattedReport = Object.values(dailyReport).map(day => ({
+            ...day,
+            totalHours: parseFloat(day.totalHours.toFixed(2)) // Arredonda para 2 casas decimais
+        }));
+
+        res.status(200).json(formattedReport);
 
     } catch (err) {
         console.error('Erro ao obter relatório de ponto:', err.message);
@@ -149,10 +200,6 @@ exports.getMonthlySalary = async (req, res) => {
                 lastInTime = null; // Resetar para o próximo par in/out
             }
         }
-
-        // Se houver um clock-in sem um clock-out correspondente no final do mês,
-        // você pode decidir como lidar com isso (ex: ignorar, considerar como ainda trabalhando)
-        // Por simplicidade, aqui apenas ignoramos o último 'in' sem 'out'.
 
         const monthlySalary = totalHours * hourlyRate;
 
