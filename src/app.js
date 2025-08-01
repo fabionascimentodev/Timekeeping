@@ -15,6 +15,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+app.post('/test-post', (req, res) => {
+    console.log('Recebida requisição POST em /test-post');
+    console.log('Corpo da requisição:', req.body);
+    res.status(200).json({ message: 'POST de teste recebido com sucesso!', data: req.body });
+});
+
 // Rotas da API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
