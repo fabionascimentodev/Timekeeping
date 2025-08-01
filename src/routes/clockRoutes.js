@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const clockController = require('../controllers/clockController');
-const authMiddleware = require('../middlewares/authMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
 
 // Rotas protegidas por autenticação
 router.post('/', authMiddleware, clockController.clockIn);
