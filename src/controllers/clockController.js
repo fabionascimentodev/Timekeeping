@@ -95,13 +95,11 @@ exports.clockOut = async (req, res) => {
     }
 };
 
-// Função para obter relatório de ponto de um usuário (ainda não implementada completamente)
+// Função para obter relatório de ponto de um usuário
 exports.getClockReport = async (req, res) => {
-    // O user_id vem dos parâmetros da URL
-    const { userId } = req.params; // Note: req.params.userId
+    const { userId } = req.params;
 
     try {
-        // Exemplo: Buscar todas as entradas de ponto para o userId fornecido
         const reportQuery = `
             SELECT * FROM clock_entries
             WHERE user_id = $1
@@ -117,7 +115,58 @@ exports.getClockReport = async (req, res) => {
     }
 };
 
-// Função para obter o salário mensal (placeholder)
+// Função para obter o salário mensal
 exports.getMonthlySalary = async (req, res) => {
-    res.status(501).json({ msg: 'Funcionalidade de salário mensal ainda não implementada.' });
+    const { userId } = req.params;
+    const hourlyRate = 25.00; // Exemplo: R$ 25 por hora
+
+    try {
+        // Obter o primeiro e o último dia do mês atual
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        // Buscar todas as entradas e saídas do mês para o usuário
+        const entriesQuery = `
+            SELECT clock_type, timestamp
+            FROM clock_entries
+            WHERE user_id = $1 AND timestamp BETWEEN $2 AND $3
+            ORDER BY timestamp ASC;
+        `;
+        const entriesResult = await pool.query(entriesQuery, [userId, startOfMonth, endOfMonth]);
+        const entries = entriesResult.rows;
+
+        let totalHours = 0;
+        let lastInTime = null;
+
+        // Iterar sobre as entradas para calcular as horas trabalhadas
+        for (const entry of entries) {
+            if (entry.clock_type === 'in') {
+                lastInTime = entry.timestamp;
+            } else if (entry.clock_type === 'out' && lastInTime) {
+                const durationMs = entry.timestamp.getTime() - lastInTime.getTime();
+                totalHours += durationMs / (1000 * 60 * 60); // Converter milissegundos para horas
+                lastInTime = null; // Resetar para o próximo par in/out
+            }
+        }
+
+        // Se houver um clock-in sem um clock-out correspondente no final do mês,
+        // você pode decidir como lidar com isso (ex: ignorar, considerar como ainda trabalhando)
+        // Por simplicidade, aqui apenas ignoramos o último 'in' sem 'out'.
+
+        const monthlySalary = totalHours * hourlyRate;
+
+        res.status(200).json({
+            userId: userId,
+            month: now.getMonth() + 1, // Mês é 0-indexado, então adiciona 1
+            year: now.getFullYear(),
+            totalHoursWorked: parseFloat(totalHours.toFixed(2)), // Arredonda para 2 casas decimais
+            hourlyRate: hourlyRate,
+            monthlySalary: parseFloat(monthlySalary.toFixed(2)) // Arredonda para 2 casas decimais
+        });
+
+    } catch (err) {
+        console.error('Erro ao obter salário mensal:', err.message);
+        res.status(500).send('Erro no servidor ao obter salário mensal.');
+    }
 };
