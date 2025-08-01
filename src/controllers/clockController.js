@@ -1,126 +1,123 @@
 // src/controllers/clockController.js
-const pool = require('../config/db');
+const pool = require('../config/db'); // Importa o pool de conexão com o banco de dados
+const { validationResult } = require('express-validator'); // Para validação de requisições
 
-// @desc    Registrar uma marcação de ponto
-// @route   POST /api/clock
-// @access  Private (apenas para o funcionário logado)
+// Função para registrar entrada de ponto (clock-in)
 exports.clockIn = async (req, res) => {
-    const { clock_type } = req.body;
-    const user_id = req.user.id; // O ID do usuário vem do middleware
+    // Validação dos dados de entrada (opcional, mas recomendado para latitude/longitude)
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    // O user_id vem do token JWT, adicionado pelo authMiddleware
+    const userId = req.user.id;
+    // O tipo de ponto (in/out) e localização vêm do corpo da requisição
+    const { latitude, longitude } = req.body; // latitude e longitude são opcionais
 
     try {
-        const newClockEntry = await pool.query(
-            'INSERT INTO clock_entries (user_id, clock_type) VALUES ($1, $2) RETURNING *',
-            [user_id, clock_type]
-        );
-        res.status(201).json(newClockEntry.rows[0]);
+        // Verifica se o usuário já fez um clock-in sem um clock-out correspondente
+        // Isso evita múltiplos clock-ins sem um out
+        const lastEntryQuery = `
+            SELECT clock_type FROM clock_entries
+            WHERE user_id = $1
+            ORDER BY timestamp DESC
+            LIMIT 1;
+        `;
+        const lastEntryResult = await pool.query(lastEntryQuery, [userId]);
+
+        if (lastEntryResult.rows.length > 0 && lastEntryResult.rows[0].clock_type === 'in') {
+            return res.status(400).json({ msg: 'Você já fez um registro de entrada sem um registro de saída correspondente.' });
+        }
+
+        // Insere o registro de entrada no banco de dados
+        const insertQuery = `
+            INSERT INTO clock_entries (user_id, clock_type, latitude, longitude)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *;
+        `;
+        const newEntry = await pool.query(insertQuery, [userId, 'in', latitude, longitude]);
+
+        res.status(201).json({
+            msg: 'Registro de entrada realizado com sucesso!',
+            entry: newEntry.rows[0]
+        });
+
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Erro no servidor');
+        console.error('Erro ao registrar entrada de ponto:', err.message);
+        res.status(500).send('Erro no servidor ao registrar entrada.');
     }
 };
 
-// @desc    Obter relatório de ponto de um usuário (apenas para o próprio ou admin)
-// @route   GET /api/clock/report/:id
-// @access  Private (porém com validação de role)
+// Função para registrar saída de ponto (clock-out)
+exports.clockOut = async (req, res) => {
+    // Validação dos dados de entrada (opcional, mas recomendado para latitude/longitude)
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    // O user_id vem do token JWT
+    const userId = req.user.id;
+    const { latitude, longitude } = req.body; // latitude e longitude são opcionais
+
+    try {
+        // Verifica se o usuário já fez um clock-out sem um clock-in correspondente
+        // Isso evita múltiplos clock-outs sem um in
+        const lastEntryQuery = `
+            SELECT clock_type FROM clock_entries
+            WHERE user_id = $1
+            ORDER BY timestamp DESC
+            LIMIT 1;
+        `;
+        const lastEntryResult = await pool.query(lastEntryQuery, [userId]);
+
+        if (lastEntryResult.rows.length === 0 || lastEntryResult.rows[0].clock_type === 'out') {
+            return res.status(400).json({ msg: 'Você não tem um registro de entrada ativo para registrar uma saída.' });
+        }
+
+        // Insere o registro de saída no banco de dados
+        const insertQuery = `
+            INSERT INTO clock_entries (user_id, clock_type, latitude, longitude)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *;
+        `;
+        const newEntry = await pool.query(insertQuery, [userId, 'out', latitude, longitude]);
+
+        res.status(201).json({
+            msg: 'Registro de saída realizado com sucesso!',
+            entry: newEntry.rows[0]
+        });
+
+    } catch (err) {
+        console.error('Erro ao registrar saída de ponto:', err.message);
+        res.status(500).send('Erro no servidor ao registrar saída.');
+    }
+};
+
+// Função para obter relatório de ponto de um usuário (ainda não implementada completamente)
 exports.getClockReport = async (req, res) => {
-    const user_id_from_url = req.params.id;
-    const logged_in_user_id = req.user.id;
-    const logged_in_user_role = req.user.role;
+    // O user_id vem dos parâmetros da URL
+    const { userId } = req.params; // Note: req.params.userId
 
     try {
-        // Validação: apenas o próprio usuário ou um admin pode ver o relatório
-        if (logged_in_user_role !== 'admin' && user_id_from_url !== logged_in_user_id.toString()) {
-            return res.status(403).json({ msg: 'Acesso negado' });
-        }
+        // Exemplo: Buscar todas as entradas de ponto para o userId fornecido
+        const reportQuery = `
+            SELECT * FROM clock_entries
+            WHERE user_id = $1
+            ORDER BY timestamp ASC;
+        `;
+        const reportResult = await pool.query(reportQuery, [userId]);
 
-        const report = await pool.query(
-            'SELECT * FROM clock_entries WHERE user_id = $1 ORDER BY timestamp DESC',
-            [user_id_from_url]
-        );
-        res.json(report.rows);
+        res.status(200).json(reportResult.rows);
 
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Erro no servidor');
+        console.error('Erro ao obter relatório de ponto:', err.message);
+        res.status(500).send('Erro no servidor ao obter relatório de ponto.');
     }
 };
 
-// @desc    Obter salário mensal de um usuário (apenas para o próprio ou admin)
-// @route   GET /api/clock/salary/:id
-// @access  Private (com validação de role)
+// Função para obter o salário mensal (placeholder)
 exports.getMonthlySalary = async (req, res) => {
-    const user_id_from_url = req.params.id;
-    const logged_in_user_id = req.user.id;
-    const logged_in_user_role = req.user.role;
-
-    try {
-        // Validação: apenas o próprio usuário ou um admin pode ver o salário
-        if (logged_in_user_role !== 'admin' && user_id_from_url !== logged_in_user_id.toString()) {
-            return res.status(403).json({ msg: 'Acesso negado' });
-        }
-
-        // 1. Obter a taxa diária do usuário
-        const user = await pool.query('SELECT daily_rate FROM users WHERE id = $1', [user_id_from_url]);
-        if (user.rows.length === 0) {
-            return res.status(404).json({ msg: 'Usuário não encontrado' });
-        }
-        const daily_rate = parseFloat(user.rows[0].daily_rate);
-
-        // 2. Obter todas as marcações de ponto do mês atual para o usuário
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        
-        const endOfMonth = new Date();
-        endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-        endOfMonth.setDate(0);
-        endOfMonth.setHours(23, 59, 59, 999);
-
-        const clockEntries = await pool.query(
-            'SELECT clock_type, timestamp FROM clock_entries WHERE user_id = $1 AND timestamp >= $2 AND timestamp <= $3 ORDER BY timestamp ASC',
-            [user_id_from_url, startOfMonth, endOfMonth]
-        );
-
-        // 3. Processar as marcações para calcular as horas totais
-        let totalHours = 0;
-        let arrivalTime = null;
-        let lunchStartTime = null;
-        
-        clockEntries.rows.forEach(entry => {
-            const timestamp = new Date(entry.timestamp);
-
-            if (entry.clock_type === 'arrival') {
-                arrivalTime = timestamp;
-            } else if (entry.clock_type === 'lunch_start') {
-                lunchStartTime = timestamp;
-            } else if (entry.clock_type === 'lunch_end' && lunchStartTime) {
-                // Calcula a duração do almoço em horas e subtrai
-                const lunchDuration = (timestamp - lunchStartTime) / (1000 * 60 * 60);
-                if (arrivalTime) {
-                    const workDuration = (timestamp - arrivalTime) / (1000 * 60 * 60);
-                    totalHours += workDuration - lunchDuration;
-                }
-                lunchStartTime = null; // Zera para o próximo ciclo
-            } else if (entry.clock_type === 'departure' && arrivalTime) {
-                // Se a saída for registrada sem almoço, calcula a partir da chegada
-                const workDuration = (timestamp - arrivalTime) / (1000 * 60 * 60);
-                totalHours += workDuration;
-                arrivalTime = null; // Zera para o próximo dia
-            }
-        });
-
-        // 4. Calcular o salário
-        const monthlySalary = totalHours * daily_rate / 8; // Divide por 8 para obter o valor da hora
-
-        res.json({
-            total_hours: totalHours.toFixed(2),
-            daily_rate: daily_rate.toFixed(2),
-            monthly_salary: monthlySalary.toFixed(2)
-        });
-
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Erro no servidor');
-    }
+    res.status(501).json({ msg: 'Funcionalidade de salário mensal ainda não implementada.' });
 };
