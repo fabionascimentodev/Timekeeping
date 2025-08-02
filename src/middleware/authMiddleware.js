@@ -1,10 +1,10 @@
 // src/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 
-// Carrega as variáveis de ambiente, especialmente o JWT_SECRET
-if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config();
-}
+// REMOVA ESTE BLOCO, pois dotenv.config() já é chamado em server.js
+// if (process.env.NODE_ENV !== 'production') {
+//     require('dotenv').config();
+// }
 
 // Middleware de autenticação
 module.exports = function (req, res, next) {
@@ -22,7 +22,8 @@ module.exports = function (req, res, next) {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Adicionar o usuário do payload do token ao objeto de requisição
-        req.user = decoded.user;
+        // CORREÇÃO: Atribua 'decoded' diretamente a 'req.user', pois 'decoded' já contém o 'id'
+        req.user = decoded; // 'decoded' é { id: '...', iat: ..., exp: ... }
         next(); // Passar para a próxima middleware/rota
     } catch (err) {
         // Se o token for inválido (expirado, modificado, etc.)
